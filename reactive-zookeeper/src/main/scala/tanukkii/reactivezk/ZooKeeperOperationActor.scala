@@ -25,13 +25,19 @@ object ZKOperations {
   sealed trait ExistsResponse
   case class DoesExist(path: String, stat: Stat) extends ExistsResponse
   case class ExistsFailure(error: KeeperException) extends ExistsResponse
+
+  case class GetChildren(path: String, watch: Boolean = false)
+  sealed trait GetChildrenResponse
+  case class ChildrenGot(path: String, children: List[String])
+  case class GetChildrenFailure(error: KeeperException)
 }
 
 private [reactivezk] class ZooKeeperOperationActor(zookeeper: ZooKeeper) extends Actor
-with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback with ExistsAsyncCallback with WatcherCallback {
+with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback with ExistsAsyncCallback with GetChildrenAsyncCallback with WatcherCallback {
   import StringCallbackConversion._
   import DataCallbackConversion._
   import StatCallbackConversion._
+  import ChildrenCallbackConversion._
   import WatcherConversion._
   import ZKOperations._
 
@@ -42,6 +48,8 @@ with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback wit
     case SetData(path, data, version) => zookeeper.setData(path, data, version, setDataAsyncCallback, sender())
     case Exists(path, watch) if !watch => zookeeper.exists(path, watch, existsAsyncCallback, sender())
     case Exists(path, watch) if watch => zookeeper.exists(path, watchCallback(sender()), existsAsyncCallback, sender())
+    case GetChildren(path, watch) if !watch => zookeeper.getChildren(path, watch, getChildrenAsyncCallback, sender())
+    case GetChildren(path, watch) if watch => zookeeper.getChildren(path, watchCallback(sender()), getChildrenAsyncCallback, sender())
   }
 
 }
