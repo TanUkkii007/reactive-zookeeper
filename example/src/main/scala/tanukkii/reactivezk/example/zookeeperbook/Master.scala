@@ -53,7 +53,7 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
 
   def checkMaster: Receive = {
     case CheckMaster => zookeeperSession ! GetData("/master", false)
-    case GotData(path, data, stat) => {
+    case DataGot(path, data, stat) => {
       if (data.toString == serverId) {
         state = MasterStates.Elected
       } else {
