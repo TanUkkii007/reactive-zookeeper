@@ -22,6 +22,7 @@ object MasterProtocol {
   case object RunForMaster
   case object CheckMaster
   case object MasterExists
+  case object GetWorkers
   case class MasterElectionEnd(status: MasterState)
 }
 
@@ -31,6 +32,9 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
   import context.dispatcher
 
   var state: MasterState = MasterStates.Running
+
+  var workersCache = ChildrenCache()
+  var toProcess = ChildrenCache()
 
   def receive: Receive = runForMaster
 
@@ -43,6 +47,8 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       state = MasterStates.Elected
       log.info(s"I'm the leader $serverId")
       supervisor ! MasterElectionEnd(state)
+      context.become(takeLeadership)
+      self ! GetWorkers
     }
     case CreateFailure(e) if e.code() == Code.NODEEXISTS => {
       state = MasterStates.NotElected
@@ -63,6 +69,8 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
     case DataGot(path, data, stat) => {
       if (data.toString == serverId) {
         state = MasterStates.Elected
+        context.become(takeLeadership)
+        self ! GetWorkers
       } else {
         state = MasterStates.NotElected
       }
@@ -96,6 +104,46 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       context.become(runForMaster)
       self ! RunForMaster
     }
+  }
+
+  def takeLeadership: Receive = {
+    case GetWorkers => zookeeperSession ! GetChildren("/workers", watch = true)
+    case ChildrenGot(path, children) => {
+      log.info(s"Succesfully got a list of workers: ${children.size} workers")
+      reassignAndSet(children)
+    }
+    case GetChildrenFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! GetWorkers
+    case GetChildrenFailure(e) => throw e
+    case ZooKeeperWatchEvent(e) if e.getType == EventType.NodeChildrenChanged => {
+      assert("/workers" == e.getPath)
+      self ! GetWorkers
+    }
+  }
+
+  def reassignAndSet(children: List[String]) = {
+    if (workersCache.isEmpty) {
+      workersCache = ChildrenCache(children)
+      toProcess = ChildrenCache()
+    } else {
+      log.info("Removing and setting")
+      toProcess = workersCache.diff(ChildrenCache(children))
+      workersCache = ChildrenCache(children)
+    }
+    context.become(getAbsentWorkerTasks)
+    toProcess.children.foreach { worker =>
+      zookeeperSession ! GetChildren(s"/assign/$worker")
+    }
+  }
+
+  def getAbsentWorkerTasks: Receive = {
+    case ChildrenGot(path, children) => {
+      log.info(s"Succesfully got a list of assignments: ${children.size} tasks")
+      children.foreach { task =>
+        zookeeperSession ! GetData(s"$path/$task")
+      }
+    }
+    case GetChildrenFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! GetChildren(e.getPath)
+    case GetChildrenFailure(e) => throw e
   }
 }
 
