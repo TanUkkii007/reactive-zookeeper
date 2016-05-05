@@ -51,18 +51,18 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       context.become(takeLeadership)
       self ! GetWorkers
     }
-    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
+    case CreateFailure(e, _, _) if e.code() == Code.NODEEXISTS => {
       state = MasterStates.NotElected
       log.info(s"I'm not the leader $serverId")
       supervisor ! MasterElectionEnd(state)
       context.become(masterExists)
       self ! MasterExists
     }
-    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => {
+    case CreateFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => {
       context.become(checkMaster)
       self ! CheckMaster
     }
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, _, _) => throw e
   }
 
   def checkMaster: Receive = {
@@ -78,23 +78,23 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       context.become(runForMaster)
       supervisor ! MasterElectionEnd(state)
     }
-    case GetDataFailure(e, _) if e.code() == Code.NONODE => {
+    case GetDataFailure(e, _, _) if e.code() == Code.NONODE => {
       context.become(runForMaster)
       self ! RunForMaster
     }
-    case GetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => {
+    case GetDataFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => {
       context.system.scheduler.scheduleOnce(1 second, self, CheckMaster)
     }
-    case GetDataFailure(e, _) => throw e
+    case GetDataFailure(e, _, _) => throw e
   }
 
   def masterExists: Receive = {
     case MasterExists => zookeeperSession ! Exists("/master", watch = true)
     case DoesExist(path, stat, _) =>
-    case ExistsFailure(e, _) if e.code() == Code.CONNECTIONLOSS => {
+    case ExistsFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => {
       self ! MasterExists
     }
-    case ExistsFailure(e, _) if e.code() == Code.NONODE => {
+    case ExistsFailure(e, _, _) if e.code() == Code.NONODE => {
       state = MasterStates.Running
       context.become(runForMaster)
       self ! RunForMaster
@@ -114,8 +114,8 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       workerOrganizer ! WorkerOrganizerProtocol.ReassignAndSet(children)
       workerOrganizer ! WorkerOrganizerProtocol.GetTasks
     }
-    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetWorkers
-    case GetChildrenFailure(e, _) => throw e
+    case GetChildrenFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! GetWorkers
+    case GetChildrenFailure(e, _, _) => throw e
     case ZooKeeperWatchEvent(e) if e.getType == EventType.NodeChildrenChanged => {
       assert("/workers" == e.getPath)
       self ! GetWorkers
@@ -194,8 +194,8 @@ class WorkerTasksGetter(zookeeperSession: ActorRef, replyTo: ActorRef) extends A
   def receive: Receive = {
     case GetTasks => zookeeperSession ! GetChildren("/tasks", watch = true)
     case ChildrenGot(path, children, _) => replyTo ! Tasks(children)
-    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetTasks
-    case GetChildrenFailure(e, _) => throw e
+    case GetChildrenFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! GetTasks
+    case GetChildrenFailure(e, _, _) => throw e
     case ZooKeeperWatchEvent(e) if e.getType == EventType.NodeChildrenChanged => self ! GetTasks
   }
 }
@@ -224,8 +224,8 @@ class WorkersTaskReassigner(zookeeperSession: ActorRef) extends Actor with Actor
         context.actorOf(WorkerTaskReassigner.props(task, zookeeperSession)) ! WorkerTaskReassignerProtocol.GetDataReassign(path)
       }
     }
-    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetChildren(e.getPath)
-    case GetChildrenFailure(e, _) => throw e
+    case GetChildrenFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! GetChildren(e.getPath)
+    case GetChildrenFailure(e, _, _) => throw e
   }
 }
 
@@ -252,8 +252,8 @@ class WorkerTaskReassigner(task: String, zookeeperSession: ActorRef) extends Act
       context.become(recreateTask(RecreateTaskCtx(path, task, data)))
       self ! RecreateTask
     }
-    case GetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => zookeeperSession ! GetData(s"${e.getPath}/$task")
-    case GetDataFailure(e, _) => throw e
+    case GetDataFailure(e, path, _) if e.code() == Code.CONNECTIONLOSS => zookeeperSession ! GetData(s"$path/$task")
+    case GetDataFailure(e, _, _) => throw e
   }
 
   def recreateTask(ctx: RecreateTaskCtx): Receive = {
@@ -262,12 +262,12 @@ class WorkerTaskReassigner(task: String, zookeeperSession: ActorRef) extends Act
       context.become(deleteAssignment(ctx.path))
       self ! DeleteAssignment
     }
-    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! RecreateTask
-    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
-      log.info("Node exists already, but if it hasn't been deleted, then it will eventually, so we keep trying: " + e.getPath)
+    case CreateFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! RecreateTask
+    case CreateFailure(e, path, _) if e.code() == Code.NODEEXISTS => {
+      log.info("Node exists already, but if it hasn't been deleted, then it will eventually, so we keep trying: " + path)
       context.system.scheduler.scheduleOnce(1 second, self, RecreateTask)
     }
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, _, _) => throw e
   }
 
   def deleteAssignment(path: String): Receive = {
@@ -276,8 +276,8 @@ class WorkerTaskReassigner(task: String, zookeeperSession: ActorRef) extends Act
       log.info("Task correctly deleted: {}", path)
       context.stop(self)
     }
-    case DeleteFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! DeleteAssignment
-    case DeleteFailure(e, _) => throw e
+    case DeleteFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! DeleteAssignment
+    case DeleteFailure(e, _, _) => throw e
   }
 }
 
@@ -301,8 +301,8 @@ class WorkerTaskAssigner(task: String, designatedWorker: String, zookeeperSessio
       log.info("Assignment path: {}", assignmentPath)
       context.become(createAssignment)
       self ! CreateAssignment(assignmentPath, data)
-    case GetDataFailure(e, task: String) if e.code() == Code.CONNECTIONLOSS => self ! GetTaskData
-    case GetDataFailure(e, _) => throw e
+    case GetDataFailure(e, _, task: String) if e.code() == Code.CONNECTIONLOSS => self ! GetTaskData
+    case GetDataFailure(e, _, _) => throw e
   }
 
   def createAssignment: Receive = {
@@ -311,12 +311,12 @@ class WorkerTaskAssigner(task: String, designatedWorker: String, zookeeperSessio
       log.info("Task assigned correctly: {}", name)
       finishAssignment()
     }
-    case CreateFailure(e, data: Array[Byte]) if e.code() == Code.CONNECTIONLOSS => self ! CreateAssignment(e.getPath, data)
-    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
+    case CreateFailure(e, path, data: Array[Byte]) if e.code() == Code.CONNECTIONLOSS => self ! CreateAssignment(path, data)
+    case CreateFailure(e, _, _) if e.code() == Code.NODEEXISTS => {
       log.warning("Task already assigned")
       finishAssignment()
     }
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, _, _) => throw e
   }
 
   def finishAssignment() = context.stop(self)

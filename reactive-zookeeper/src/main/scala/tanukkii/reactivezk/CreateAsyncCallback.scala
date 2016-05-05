@@ -8,7 +8,7 @@ trait CreateAsyncCallback {
 
   def createAsyncCallback(implicit sender: ActorRef = Actor.noSender): (Int, String, ContextEnvelope, String) => Unit = {
     (rc: Int, path: String, ctx: ContextEnvelope, name: String) => rc.toKeeperExceptionOpt(path) match {
-      case Some(e) => ctx.sender ! CreateFailure(e, ctx.originalCtx)
+      case Some(e) => ctx.sender ! CreateFailure(e, path, ctx.originalCtx)
       case None => ctx.sender ! Created(path, name, ctx.originalCtx)
     }
   }

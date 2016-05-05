@@ -37,13 +37,13 @@ class Bootstrap(zooKeeperSession: ActorRef, supervisor: ActorRef) extends Actor 
       log.info("Parent created at {}", path)
       if (createdPaths == paths) supervisor ! ParentCreated
     }
-    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! CreateParent(e.getPath, Array.empty)
-    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
-      createdPaths += e.getPath
-      log.warning("Parent already registered: {}", e.getPath)
+    case CreateFailure(e, path, _) if e.code() == Code.CONNECTIONLOSS => self ! CreateParent(path, Array.empty)
+    case CreateFailure(e, path, _) if e.code() == Code.NODEEXISTS => {
+      createdPaths += path
+      log.warning("Parent already registered: {}", path)
       if (createdPaths == paths) supervisor ! ParentCreated
     }
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, _, _) => throw e
   }
 
   def createParentMessage(path: String, data: Array[Byte]) = Create(path, data, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)

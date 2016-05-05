@@ -10,7 +10,7 @@ trait SetDataAsyncCallback {
   def setDataAsyncCallback(implicit sender: ActorRef = Actor.noSender): (Int, String, ContextEnvelope, Stat) => Unit = {
     (rc: Int, path: String, ctx: ContextEnvelope, stat: Stat) => rc.toKeeperExceptionOpt(path) match {
       case None => ctx.sender ! DataSet(path, stat, ctx.originalCtx)
-      case Some(e) => ctx.sender ! SetDataFailure(e, ctx.originalCtx)
+      case Some(e) => ctx.sender ! SetDataFailure(e, path, ctx.originalCtx)
     }
   }
 }

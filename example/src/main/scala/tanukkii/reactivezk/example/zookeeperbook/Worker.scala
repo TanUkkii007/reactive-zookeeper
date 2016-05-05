@@ -47,13 +47,13 @@ class Worker(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       context.become(waiting)
       supervisor ! WorkerBootstrapFinished
     }
-    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! CreateAssignNode
-    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
+    case CreateFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! CreateAssignNode
+    case CreateFailure(e, _, _) if e.code() == Code.NODEEXISTS => {
       log.warning("Assign node already registered")
       context.become(waiting)
       supervisor ! WorkerBootstrapFinished
     }
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, _, _) => throw e
   }
 
   def register: Receive = {
@@ -62,12 +62,12 @@ class Worker(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       log.info("Registered successfully: {}", serverId)
       finishRegister()
     }
-    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! Register
-    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
+    case CreateFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! Register
+    case CreateFailure(e, _, _) if e.code() == Code.NODEEXISTS => {
       log.warning("Already registered: {}", serverId)
       finishRegister()
     }
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, _, _) => throw e
   }
 
   def finishRegister() = {
@@ -85,8 +85,8 @@ class Worker(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
         context.actorOf(TaskSubWorker.props(task, serverId, zookeeperSession)) ! TaskSubWorkerProtocol.ProcessTask
       }
     }
-    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetTasks
-    case GetChildrenFailure(e, _) => throw e
+    case GetChildrenFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! GetTasks
+    case GetChildrenFailure(e, _, _) => throw e
     case ZooKeeperWatchEvent(e) if e.getType == EventType.NodeChildrenChanged => {
       assert(s"/assign/worker-$serverId" == e.getPath)
       self ! GetTasks
@@ -116,22 +116,22 @@ class TaskSubWorker(task: String, serverId: String, zookeeperSession: ActorRef) 
       zookeeperSession ! Create(s"/status/$task", "done".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
       zookeeperSession ! Delete(s"/assign/worker-$serverId/$task", -1)
     }
-    case GetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! ProcessTask
-    case GetDataFailure(e, _) => throw e
+    case GetDataFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! ProcessTask
+    case GetDataFailure(e, _, _) => throw e
   }
 
   def taskStatus: Receive = {
     case Created(path, name, _) => log.info("Created status znode correctly: {}", name)
-    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => {
+    case CreateFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => {
       zookeeperSession ! Create(s"/status/$task", "done".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
     }
-    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => log.warning("Node exists: {}", e.getPath)
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, path, _) if e.code() == Code.NODEEXISTS => log.warning("Node exists: {}", path)
+    case CreateFailure(e, _, _) => throw e
     case Deleted(path, _) =>
       log.info("Task correctly deleted: {}", path)
       finishTask()
-    case DeleteFailure(e, _) if e.code() == Code.CONNECTIONLOSS => finishTask()
-    case DeleteFailure(e, _) => throw e
+    case DeleteFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => finishTask()
+    case DeleteFailure(e, _, _) => throw e
   }
 
   def finishTask(): Unit = context.stop(self)
@@ -164,7 +164,7 @@ class WorkerStatusUpdater(zookeeperSession: ActorRef, name: String, replyTo: Act
       context.become(setStatus)
       replyTo ! StatusUpdated(status)
     }
-    case SetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! SetStatus(status)
+    case SetDataFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! SetStatus(status)
     case SetStatus(s) if s == status => zookeeperSession ! SetData(s"/workers/$name", s.getBytes(), -1)
   }
 }

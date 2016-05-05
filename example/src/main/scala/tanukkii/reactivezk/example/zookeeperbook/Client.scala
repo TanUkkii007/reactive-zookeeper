@@ -50,8 +50,8 @@ class Task(zookeeperSession: ActorRef) extends Actor with ActorLogging {
       context.become(watchStatus(path))
       self ! WatchStatus(path)
     }
-    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! Submit
-    case CreateFailure(e, _) => throw e
+    case CreateFailure(e, _, _) if e.code() == Code.CONNECTIONLOSS => self ! Submit
+    case CreateFailure(e, _, _) => throw e
   }
 
   def watchStatus(path: String): Receive = {
@@ -69,8 +69,8 @@ class Task(zookeeperSession: ActorRef) extends Actor with ActorLogging {
         log.info("Status node is there: {}", path)
       }
     }
-    case ExistsFailure(e, _) if e.code() == Code.NONODE =>
-    case ExistsFailure(e, _) => throw e
+    case ExistsFailure(e, _, _) if e.code() == Code.NONODE =>
+    case ExistsFailure(e, _, _) => throw e
   }
 
   def getData: Receive = {
@@ -80,8 +80,8 @@ class Task(zookeeperSession: ActorRef) extends Actor with ActorLogging {
       context.become(taskDelete)
       zookeeperSession ! Delete(path, -1)
     }
-    case GetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => zookeeperSession ! GetData(e.getPath)
-    case GetDataFailure(e, _) if e.code() == Code.NONODE => {
+    case GetDataFailure(e, path, _) if e.code() == Code.CONNECTIONLOSS => zookeeperSession ! GetData(path)
+    case GetDataFailure(e, _, _) if e.code() == Code.NONODE => {
       log.warning("Status node is gone!")
       finishTask()
     }
@@ -92,8 +92,8 @@ class Task(zookeeperSession: ActorRef) extends Actor with ActorLogging {
       log.info("Successfully deleted {}", path)
       finishTask()
     }
-    case DeleteFailure(e, _) if e.code() == Code.CONNECTIONLOSS => zookeeperSession ! Delete(e.getPath, -1)
-    case DeleteFailure(e, _) => throw e
+    case DeleteFailure(e, path, _) if e.code() == Code.CONNECTIONLOSS => zookeeperSession ! Delete(path, -1)
+    case DeleteFailure(e, _, _) => throw e
   }
 
   def finishTask() = context.stop(self)
