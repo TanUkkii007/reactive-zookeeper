@@ -122,7 +122,7 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
     }
     case GetTasks => workerOrganizer ! WorkerOrganizerProtocol.GetTasks
   }
-  
+
 }
 
 object Master {
@@ -168,9 +168,11 @@ class WorkerOrganizer(zookeeperSession: ActorRef) extends Actor with ActorLoggin
         toProcess = ChildrenCache(children).diff(tasksCache)
         tasksCache = ChildrenCache(children)
       }
-      toProcess.children.foreach { task =>
-        val workerTaskAssigner = context.actorOf(WorkerTaskAssigner.props(task, workersCache.children(random.nextInt(workersCache.children.length)), zookeeperSession))
-        workerTaskAssigner ! WorkerTaskAssignerProtocol.GetTaskData
+      if (!workersCache.isEmpty) {
+        toProcess.children.foreach { task =>
+          val workerTaskAssigner = context.actorOf(WorkerTaskAssigner.props(task, workersCache.children(random.nextInt(workersCache.children.length)), zookeeperSession))
+          workerTaskAssigner ! WorkerTaskAssignerProtocol.GetTaskData
+        }
       }
     }
   }

@@ -75,7 +75,7 @@ class Task(zookeeperSession: ActorRef) extends Actor with ActorLogging {
 
   def getData: Receive = {
     case DataGot(path, data, stat, _) => {
-      val taskResult = data.toString
+      val taskResult = new String(data)
       log.info("Task {}, {}", path, taskResult)
       context.become(taskDelete)
       zookeeperSession ! Delete(path, -1)
