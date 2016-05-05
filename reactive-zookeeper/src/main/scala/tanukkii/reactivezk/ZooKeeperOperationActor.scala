@@ -35,15 +35,15 @@ object ZKOperations {
   sealed trait GetChildrenResponse
   case class ChildrenGot(path: String, children: List[String], ctx: Any)
   case class GetChildrenFailure(error: KeeperException, ctx: Any)
+
+  case class Delete(path: String, version: Int, ctx: Any = NoContext)
+  case class Deleted(path: String, ctx: Any)
+  case class DeleteFailure(error: KeeperException, ctx: Any)
 }
 
 private [reactivezk] class ZooKeeperOperationActor(zookeeper: ZooKeeper) extends Actor
-with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback with ExistsAsyncCallback with GetChildrenAsyncCallback with WatcherCallback {
-  import StringCallbackConversion._
-  import DataCallbackConversion._
-  import StatCallbackConversion._
-  import ChildrenCallbackConversion._
-  import WatcherConversion._
+with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback with ExistsAsyncCallback with GetChildrenAsyncCallback with DeleteAsyncCallback with WatcherCallback {
+  import CallbackConversion._
   import ZKOperations._
 
   def receive: Receive = {
@@ -55,6 +55,7 @@ with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback wit
     case Exists(path, watch, ctx) if watch => zookeeper.exists(path, watchCallback(sender()), existsAsyncCallback, ContextEnvelope(sender(), ctx))
     case GetChildren(path, watch, ctx) if !watch => zookeeper.getChildren(path, watch, getChildrenAsyncCallback, ContextEnvelope(sender(), ctx))
     case GetChildren(path, watch, ctx) if watch => zookeeper.getChildren(path, watchCallback(sender()), getChildrenAsyncCallback, ContextEnvelope(sender(), ctx))
+    case Delete(path, version, ctx) => zookeeper.delete(path, version, deleteAsyncCallback, ContextEnvelope(sender(), ctx))
   }
 
 }
