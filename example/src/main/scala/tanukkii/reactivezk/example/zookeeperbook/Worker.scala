@@ -41,32 +41,32 @@ class Worker(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
 
   def bootstrap: Receive = {
     case CreateAssignNode => zookeeperSession ! Create(s"/assign/worker-$serverId", Array.empty, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
-    case Created(path, name) => {
+    case Created(path, name, _) => {
       log.info("Assign node created")
       context.become(waiting)
       supervisor ! WorkerBootstrapFinished
     }
-    case CreateFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! CreateAssignNode
-    case CreateFailure(e) if e.code() == Code.NODEEXISTS => {
+    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! CreateAssignNode
+    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
       log.warning("Assign node already registered")
       context.become(waiting)
       supervisor ! WorkerBootstrapFinished
     }
-    case CreateFailure(e) => throw e
+    case CreateFailure(e, _) => throw e
   }
 
   def register: Receive = {
     case Register => zookeeperSession ! Create(s"/workers/$name", "Idle".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
-    case Created(path, name) => {
+    case Created(path, name, _) => {
       log.info("Registered successfully: {}", serverId)
       finishRegister()
     }
-    case CreateFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! Register
-    case CreateFailure(e) if e.code() == Code.NODEEXISTS => {
+    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! Register
+    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
       log.warning("Already registered: {}", serverId)
       finishRegister()
     }
-    case CreateFailure(e) => throw e
+    case CreateFailure(e, _) => throw e
   }
 
   def finishRegister() = {
@@ -82,23 +82,23 @@ class Worker(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
   }
 
   def updateStatus(status: String): Receive = {
-    case DataSet(path, stat) => {
+    case DataSet(path, stat, _) => {
       context.become(setStatus)
       supervisor ! StatusUpdated(status)
     }
-    case SetDataFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! SetStatus(status)
+    case SetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! SetStatus(status)
     case SetStatus(s) if s == status => zookeeperSession ! SetData(s"/workers/$name", s.getBytes(), -1)
   }
 
   def getTasks: Receive = {
     case GetTasks => zookeeperSession ! GetChildren(s"/assign/worker-$serverId", watch = true)
-    case ChildrenGot(path, children) => {
+    case ChildrenGot(path, children, _) => {
       log.info("Looping into tasks")
       context.become(setStatus)
       self ! SetStatus("Working")
     }
-    case GetChildrenFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! GetTasks
-    case GetChildrenFailure(e) => throw e
+    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetTasks
+    case GetChildrenFailure(e, _) => throw e
   }
 
   def name = s"worker-$serverId"

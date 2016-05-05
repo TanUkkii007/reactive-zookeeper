@@ -43,30 +43,30 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       log.info("Running for master")
       zookeeperSession ! Create("/master", serverId.getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
     }
-    case Created(path, name) => {
+    case Created(path, name, _) => {
       state = MasterStates.Elected
       log.info(s"I'm the leader $serverId")
       supervisor ! MasterElectionEnd(state)
       context.become(takeLeadership)
       self ! GetWorkers
     }
-    case CreateFailure(e) if e.code() == Code.NODEEXISTS => {
+    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
       state = MasterStates.NotElected
       log.info(s"I'm not the leader $serverId")
       supervisor ! MasterElectionEnd(state)
       context.become(masterExists)
       self ! MasterExists
     }
-    case CreateFailure(e) if e.code() == Code.CONNECTIONLOSS => {
+    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => {
       context.become(checkMaster)
       self ! CheckMaster
     }
-    case CreateFailure(e) => throw e
+    case CreateFailure(e, _) => throw e
   }
 
   def checkMaster: Receive = {
     case CheckMaster => zookeeperSession ! GetData("/master")
-    case DataGot(path, data, stat) => {
+    case DataGot(path, data, stat, _) => {
       if (data.toString == serverId) {
         state = MasterStates.Elected
         context.become(takeLeadership)
@@ -77,23 +77,23 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       context.become(runForMaster)
       supervisor ! MasterElectionEnd(state)
     }
-    case GetDataFailure(e) if e.code() == Code.NONODE => {
+    case GetDataFailure(e, _) if e.code() == Code.NONODE => {
       context.become(runForMaster)
       self ! RunForMaster
     }
-    case GetDataFailure(e) if e.code() == Code.CONNECTIONLOSS => {
+    case GetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => {
       context.system.scheduler.scheduleOnce(1 second, self, CheckMaster)
     }
-    case GetDataFailure(e) => throw e
+    case GetDataFailure(e, _) => throw e
   }
 
   def masterExists: Receive = {
     case MasterExists => zookeeperSession ! Exists("/master", watch = true)
-    case DoesExist(path, stat) =>
-    case ExistsFailure(e) if e.code() == Code.CONNECTIONLOSS => {
+    case DoesExist(path, stat, _) =>
+    case ExistsFailure(e, _) if e.code() == Code.CONNECTIONLOSS => {
       self ! MasterExists
     }
-    case ExistsFailure(e) if e.code() == Code.NONODE => {
+    case ExistsFailure(e, _) if e.code() == Code.NONODE => {
       state = MasterStates.Running
       context.become(runForMaster)
       self ! RunForMaster
@@ -108,12 +108,12 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
 
   def takeLeadership: Receive = {
     case GetWorkers => zookeeperSession ! GetChildren("/workers", watch = true)
-    case ChildrenGot(path, children) => {
+    case ChildrenGot(path, children, _) => {
       log.info(s"Succesfully got a list of workers: ${children.size} workers")
       reassignAndSet(children)
     }
-    case GetChildrenFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! GetWorkers
-    case GetChildrenFailure(e) => throw e
+    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetWorkers
+    case GetChildrenFailure(e, _) => throw e
     case ZooKeeperWatchEvent(e) if e.getType == EventType.NodeChildrenChanged => {
       assert("/workers" == e.getPath)
       self ! GetWorkers
@@ -136,14 +136,14 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
   }
 
   def getAbsentWorkerTasks: Receive = {
-    case ChildrenGot(path, children) => {
+    case ChildrenGot(path, children, _) => {
       log.info(s"Succesfully got a list of assignments: ${children.size} tasks")
       children.foreach { task =>
         zookeeperSession ! GetData(s"$path/$task")
       }
     }
-    case GetChildrenFailure(e) if e.code() == Code.CONNECTIONLOSS => self ! GetChildren(e.getPath)
-    case GetChildrenFailure(e) => throw e
+    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetChildren(e.getPath)
+    case GetChildrenFailure(e, _) => throw e
   }
 }
 
