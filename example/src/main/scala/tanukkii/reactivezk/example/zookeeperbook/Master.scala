@@ -8,6 +8,7 @@ import org.apache.zookeeper.ZooDefs.Ids
 import tanukkii.reactivezk.ZooKeeperActorProtocol.ZooKeeperWatchEvent
 import tanukkii.reactivezk.{IdConversions, ZKOperations}
 import scala.concurrent.duration._
+import scala.util.Random
 import IdConversions._
 
 sealed trait MasterState
@@ -23,6 +24,7 @@ object MasterProtocol {
   case object CheckMaster
   case object MasterExists
   case object GetWorkers
+  case object GetTasks
   case class MasterElectionEnd(status: MasterState)
 }
 
@@ -33,8 +35,7 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
 
   var state: MasterState = MasterStates.Running
 
-  var workersCache = ChildrenCache()
-  var toProcess = ChildrenCache()
+  val workerOrganizer = context.actorOf(WorkerOrganizer.props(zookeeperSession), "WorkerOrganizer")
 
   def receive: Receive = runForMaster
 
@@ -110,7 +111,8 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
     case GetWorkers => zookeeperSession ! GetChildren("/workers", watch = true)
     case ChildrenGot(path, children, _) => {
       log.info(s"Succesfully got a list of workers: ${children.size} workers")
-      reassignAndSet(children)
+      workerOrganizer ! WorkerOrganizerProtocol.ReassignAndSet(children)
+      workerOrganizer ! WorkerOrganizerProtocol.GetTasks
     }
     case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetWorkers
     case GetChildrenFailure(e, _) => throw e
@@ -118,28 +120,106 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
       assert("/workers" == e.getPath)
       self ! GetWorkers
     }
+    case GetTasks => workerOrganizer ! WorkerOrganizerProtocol.GetTasks
   }
+  
+}
 
-  def reassignAndSet(children: List[String]) = {
-    if (workersCache.isEmpty) {
-      workersCache = ChildrenCache(children)
-      toProcess = ChildrenCache()
-    } else {
-      log.info("Removing and setting")
-      toProcess = workersCache.diff(ChildrenCache(children))
-      workersCache = ChildrenCache(children)
+object Master {
+  def props(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef) = Props(new Master(serverId, zookeeperSession, supervisor))
+}
+
+object WorkerOrganizerProtocol {
+  case class ReassignAndSet(workers: List[String])
+  case object GetTasks
+}
+
+class WorkerOrganizer(zookeeperSession: ActorRef) extends Actor with ActorLogging {
+  import WorkerOrganizerProtocol._
+
+  var workersCache = ChildrenCache()
+  var tasksCache = ChildrenCache()
+  var toProcess = ChildrenCache()
+
+  val random = new Random(this.hashCode())
+
+  val workersTaskReassigner = context.actorOf(WorkersTaskReassigner.props(zookeeperSession), "WorkersTaskReassigner")
+
+  val workerTasksGetter = context.actorOf(WorkerTasksGetter.props(zookeeperSession, self), "WorkerTasksGetter")
+
+  def receive: Receive = {
+    case ReassignAndSet(children) => {
+      if (workersCache.isEmpty) {
+        workersCache = ChildrenCache(children)
+        toProcess = ChildrenCache()
+      } else {
+        log.info("Removing and setting")
+        toProcess = workersCache.diff(ChildrenCache(children))
+        workersCache = ChildrenCache(children)
+        workersTaskReassigner ! WorkersTaskAssignerProtocol.GetAbsentWorkerTasks(toProcess.children)
+      }
     }
-    context.become(getAbsentWorkerTasks)
-    toProcess.children.foreach { worker =>
-      zookeeperSession ! GetChildren(s"/assign/$worker")
+    case GetTasks => workerTasksGetter ! WorkerTasksGetterProtocol.GetTasks
+    case WorkerTasksGetterProtocol.Tasks(children) => {
+      if (tasksCache.isEmpty) {
+        tasksCache = ChildrenCache(children)
+        toProcess = ChildrenCache(children)
+      } else {
+        toProcess = ChildrenCache(children).diff(tasksCache)
+        tasksCache = ChildrenCache(children)
+      }
+      toProcess.children.foreach { task =>
+        val workerTaskAssigner = context.actorOf(WorkerTaskAssigner.props(task, workersCache.children(random.nextInt(workersCache.children.length)), zookeeperSession))
+        workerTaskAssigner ! WorkerTaskAssignerProtocol.GetTaskData
+      }
     }
   }
+}
 
-  def getAbsentWorkerTasks: Receive = {
+object WorkerOrganizer {
+  def props(zookeeperSession: ActorRef): Props = Props(new WorkerOrganizer(zookeeperSession))
+}
+
+object WorkerTasksGetterProtocol {
+  case object GetTasks
+  case class Tasks(tasks: List[String])
+}
+
+class WorkerTasksGetter(zookeeperSession: ActorRef, replyTo: ActorRef) extends Actor {
+  import WorkerTasksGetterProtocol._
+  import ZKOperations._
+
+  def receive: Receive = {
+    case GetTasks => zookeeperSession ! GetChildren("/tasks", watch = true)
+    case ChildrenGot(path, children, _) => replyTo ! Tasks(children)
+    case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetTasks
+    case GetChildrenFailure(e, _) => throw e
+    case ZooKeeperWatchEvent(e) if e.getType == EventType.NodeChildrenChanged => self ! GetTasks
+  }
+}
+
+object WorkerTasksGetter {
+  def props(zookeeperSession: ActorRef, replyTo: ActorRef): Props = Props(new WorkerTasksGetter(zookeeperSession, replyTo))
+}
+
+object WorkersTaskAssignerProtocol {
+  case class GetAbsentWorkerTasks(workers: List[String])
+}
+
+class WorkersTaskReassigner(zookeeperSession: ActorRef) extends Actor with ActorLogging {
+  import WorkersTaskAssignerProtocol._
+  import ZKOperations._
+
+  def receive: Receive = {
+    case GetAbsentWorkerTasks(workers) => {
+      workers.foreach { worker =>
+        zookeeperSession ! GetChildren(s"/assign/$worker")
+      }
+    }
     case ChildrenGot(path, children, _) => {
       log.info(s"Succesfully got a list of assignments: ${children.size} tasks")
       children.foreach { task =>
-        zookeeperSession ! GetData(s"$path/$task")
+        context.actorOf(WorkerTaskReassigner.props(task, zookeeperSession)) ! WorkerTaskReassignerProtocol.GetDataReassign(path)
       }
     }
     case GetChildrenFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! GetChildren(e.getPath)
@@ -147,6 +227,99 @@ class Master(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef)
   }
 }
 
-object Master {
-  def props(serverId: String, zookeeperSession: ActorRef, supervisor: ActorRef) = Props(new Master(serverId, zookeeperSession, supervisor))
+object WorkersTaskReassigner {
+  def props(zookeeperSession: ActorRef): Props = Props(new WorkersTaskReassigner(zookeeperSession))
+}
+
+case class RecreateTaskCtx(path: String, task: String, data: Array[Byte])
+
+object WorkerTaskReassignerProtocol {
+  case class GetDataReassign(path: String)
+  case object RecreateTask
+  case object DeleteAssignment
+}
+
+class WorkerTaskReassigner(task: String, zookeeperSession: ActorRef) extends Actor with ActorLogging {
+  import WorkerTaskReassignerProtocol._
+  import ZKOperations._
+  import context.dispatcher
+
+  def receive: Receive = {
+    case GetDataReassign(path) => zookeeperSession ! GetData(s"$path/$task")
+    case DataGot(path, data, stat, _) => {
+      context.become(recreateTask(RecreateTaskCtx(path, task, data)))
+      self ! RecreateTask
+    }
+    case GetDataFailure(e, _) if e.code() == Code.CONNECTIONLOSS => zookeeperSession ! GetData(s"${e.getPath}/$task")
+    case GetDataFailure(e, _) => throw e
+  }
+
+  def recreateTask(ctx: RecreateTaskCtx): Receive = {
+    case RecreateTask => zookeeperSession ! Create(s"/tasks/$task", ctx.data, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
+    case Created(path, name, _) => {
+      context.become(deleteAssignment(ctx.path))
+      self ! DeleteAssignment
+    }
+    case CreateFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! RecreateTask
+    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
+      log.info("Node exists already, but if it hasn't been deleted, then it will eventually, so we keep trying: " + e.getPath)
+      context.system.scheduler.scheduleOnce(1 second, self, RecreateTask)
+    }
+    case CreateFailure(e, _) => throw e
+  }
+
+  def deleteAssignment(path: String): Receive = {
+    case DeleteAssignment => zookeeperSession ! Delete(path, -1)
+    case Deleted(path, _) => {
+      log.info("Task correctly deleted: {}", path)
+      context.stop(self)
+    }
+    case DeleteFailure(e, _) if e.code() == Code.CONNECTIONLOSS => self ! DeleteAssignment
+    case DeleteFailure(e, _) => throw e
+  }
+}
+
+object WorkerTaskReassigner {
+  def props(task: String, zookeeperSession: ActorRef): Props = Props(new WorkerTaskReassigner(task, zookeeperSession))
+}
+
+object WorkerTaskAssignerProtocol {
+  case object GetTaskData
+  case class CreateAssignment(path: String, data: Array[Byte])
+}
+
+class WorkerTaskAssigner(task: String, designatedWorker: String, zookeeperSession: ActorRef) extends Actor with ActorLogging {
+  import WorkerTaskAssignerProtocol._
+  import ZKOperations._
+
+  def receive: Receive = {
+    case GetTaskData => zookeeperSession ! GetData(s"/tasks/$task", ctx = task)
+    case DataGot(path, data, stat, task: String) =>
+      val assignmentPath = s"/assign/$designatedWorker/$task"
+      log.info("Assignment path: {}", assignmentPath)
+      context.become(createAssignment)
+      self ! CreateAssignment(assignmentPath, data)
+    case GetDataFailure(e, task: String) if e.code() == Code.CONNECTIONLOSS => self ! GetTaskData
+    case GetDataFailure(e, _) => throw e
+  }
+
+  def createAssignment: Receive = {
+    case CreateAssignment(path, data) => zookeeperSession ! Create(path, data, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT, data)
+    case Created(path, name, ctx: Array[Byte]) => {
+      log.info("Task assigned correctly: {}", name)
+      finishAssignment()
+    }
+    case CreateFailure(e, data: Array[Byte]) if e.code() == Code.CONNECTIONLOSS => self ! CreateAssignment(e.getPath, data)
+    case CreateFailure(e, _) if e.code() == Code.NODEEXISTS => {
+      log.warning("Task already assigned")
+      finishAssignment()
+    }
+    case CreateFailure(e, _) => throw e
+  }
+
+  def finishAssignment() = context.stop(self)
+}
+
+object WorkerTaskAssigner {
+  def props(task: String, designatedWorker: String, zookeeperSession: ActorRef): Props = Props(new WorkerTaskAssigner(task, designatedWorker, zookeeperSession))
 }
