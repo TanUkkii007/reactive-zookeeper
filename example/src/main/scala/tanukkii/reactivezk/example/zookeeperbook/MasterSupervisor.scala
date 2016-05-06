@@ -6,8 +6,7 @@ import akka.actor.SupervisorStrategy.{Restart, Decider, Stop}
 import akka.actor._
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.Watcher.Event.KeeperState._
-import tanukkii.reactivezk.ReactiveZK
-import tanukkii.reactivezk.ZooKeeperActorProtocol.ZooKeeperWatchEvent
+import tanukkii.reactivezk._
 
 class MasterSupervisor extends Actor with ActorLogging{
   import BootstrapProtocol._

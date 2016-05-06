@@ -3,8 +3,8 @@ package tanukkii.reactivezk.example.zookeeperbook
 import akka.actor.SupervisorStrategy._
 import akka.actor._
 import org.apache.zookeeper.KeeperException
-import tanukkii.reactivezk.ReactiveZK
-import tanukkii.reactivezk.ZooKeeperActorProtocol.{Close, ZooKeeperWatchEvent}
+import tanukkii.reactivezk._
+import tanukkii.reactivezk.ZooKeeperSession.Close
 import org.apache.zookeeper.Watcher.Event.KeeperState._
 import scala.util.Random
 

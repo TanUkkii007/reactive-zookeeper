@@ -5,10 +5,8 @@ import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.EventType
 import org.apache.zookeeper.ZooDefs.Ids
-import tanukkii.reactivezk.IdConversions
+import tanukkii.reactivezk._
 import tanukkii.reactivezk.ZKOperations._
-import IdConversions._
-import tanukkii.reactivezk.ZooKeeperActorProtocol.ZooKeeperWatchEvent
 
 object WorkerProtocol {
   case object CreateAssignNode

@@ -2,7 +2,6 @@ package tanukkii.reactivezk
 
 import akka.actor.{Actor, ActorRef}
 import org.apache.zookeeper.WatchedEvent
-import tanukkii.reactivezk.ZooKeeperActorProtocol.ZooKeeperWatchEvent
 
 trait WatcherCallback {
   def watchCallback(sendTo: ActorRef)(implicit sender: ActorRef = Actor.noSender): (WatchedEvent) => Unit = {

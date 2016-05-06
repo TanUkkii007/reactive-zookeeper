@@ -6,8 +6,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState._
 import scala.concurrent.duration.FiniteDuration
 
 
-object ZooKeeperActorProtocol {
-  case class ZooKeeperWatchEvent(e: WatchedEvent)
+object ZooKeeperSession {
   case object Close
   case object Closed
 }
@@ -15,7 +14,7 @@ object ZooKeeperActorProtocol {
 private [reactivezk] class ZooKeeperSessionActor(connectString: String, sessionTimeout: FiniteDuration) extends Actor
 with ActorLogging with WatcherCallback{
   import WatcherConversion._
-  import ZooKeeperActorProtocol._
+  import ZooKeeperSession._
 
   var connected = false
   var expired = false

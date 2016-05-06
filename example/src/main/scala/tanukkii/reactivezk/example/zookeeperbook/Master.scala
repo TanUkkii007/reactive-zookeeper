@@ -5,11 +5,9 @@ import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.EventType
 import org.apache.zookeeper.ZooDefs.Ids
-import tanukkii.reactivezk.ZooKeeperActorProtocol.ZooKeeperWatchEvent
-import tanukkii.reactivezk.{IdConversions, ZKOperations}
+import tanukkii.reactivezk._
 import scala.concurrent.duration._
 import scala.util.Random
-import IdConversions._
 
 sealed trait MasterState
 
