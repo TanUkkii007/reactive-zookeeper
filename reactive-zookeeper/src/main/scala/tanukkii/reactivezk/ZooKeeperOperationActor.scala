@@ -28,7 +28,7 @@ object ZKOperations {
 
   case class Exists(path: String, watch: Boolean = false, ctx: Any = NoContext)
   sealed trait ExistsResponse
-  case class DoesExist(path: String, stat: Stat, ctx: Any) extends ExistsResponse
+  case class DoesExist(path: String, stat: Option[Stat], ctx: Any) extends ExistsResponse
   case class ExistsFailure(error: KeeperException, path: String, ctx: Any) extends ExistsResponse
 
   case class GetChildren(path: String, watch: Boolean = false, ctx: Any = NoContext)

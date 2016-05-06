@@ -63,7 +63,7 @@ class Task(zookeeperSession: ActorRef) extends Actor with ActorLogging {
       zookeeperSession ! GetData(path)
     }
     case DoesExist(path, stat, _) => {
-      if (stat != null) {
+      stat.foreach { _ =>
         context.become(getData)
         zookeeperSession ! GetData(path)
         log.info("Status node is there: {}", path)
