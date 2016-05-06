@@ -9,7 +9,10 @@ import scala.concurrent.duration.FiniteDuration
 object ZooKeeperSession {
   case object Close
   case object Closed
+  case object Restart
 }
+
+@SerialVersionUID(1L) class ZooKeeperSessionRestartException() extends Exception("closing the ZooKeeper session and will reestablish a new session")
 
 private [reactivezk] class ZooKeeperSessionActor(connectString: String, sessionTimeout: FiniteDuration) extends Actor
 with ActorLogging with WatcherCallback{
@@ -18,6 +21,7 @@ with ActorLogging with WatcherCallback{
 
   var connected = false
   var expired = false
+  var closed = false
 
   val zookeeper = new ZooKeeper(connectString, sessionTimeout.toMillis.toInt, watchCallback(self))
 
@@ -35,16 +39,23 @@ with ActorLogging with WatcherCallback{
       context.system.eventStream.publish(ZooKeeperWatchEvent(e))
     }
     case Close => {
-      zookeeper.close()
-      log.info("ZooKeeper session closed")
+      close()
+      closed = true
       sender() ! Closed
+      context.stop(self)
     }
+    case Restart => throw new ZooKeeperSessionRestartException()
     case other => zookeeperOperation forward other
   }
 
   override def postStop(): Unit = {
-    zookeeper.close()
+    if (!closed) close()
     super.postStop()
+  }
+
+  def close() = {
+    zookeeper.close()
+    log.info("ZooKeeper session is closed.")
   }
 }
 
