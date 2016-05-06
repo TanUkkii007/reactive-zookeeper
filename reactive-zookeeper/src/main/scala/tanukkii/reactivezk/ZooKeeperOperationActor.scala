@@ -37,8 +37,9 @@ object ZKOperations {
   case class GetChildrenFailure(error: KeeperException, path: String, ctx: Any)
 
   case class Delete(path: String, version: Int, ctx: Any = NoContext)
-  case class Deleted(path: String, ctx: Any)
-  case class DeleteFailure(error: KeeperException, path: String, ctx: Any)
+  sealed trait DeleteResponse
+  case class Deleted(path: String, ctx: Any) extends DeleteResponse
+  case class DeleteFailure(error: KeeperException, path: String, ctx: Any) extends DeleteResponse
 }
 
 private [reactivezk] class ZooKeeperOperationActor(zookeeper: ZooKeeper) extends Actor
