@@ -2,7 +2,7 @@ package tanukkii.reactivezk.example.zookeeperbook
 
 import akka.actor.ActorSystem
 
-object Main extends App {
+object MasterMain extends App {
 
   val system = ActorSystem("zookeeperbook")
 
