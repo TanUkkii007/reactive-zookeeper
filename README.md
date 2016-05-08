@@ -6,8 +6,8 @@ Let-it-crash style ZooKeeper client based on Akka actor
 - Asynchronous: ZooKeeper event callback is asynchronously executed and should never block in its execution.
 Actors are also asynchronous and well-designed actor never blocks.
 - Passive: ZooKeeper client application is basically designed in passive fashion. 
-Actors are also passive. they wait for messages and until they receive a message nothing happens.
- This characteristic fits ZooKeeper's event-driven style.
+Actors are also passive. They wait for messages and until they receive a message nothing happens.
+ This characteristic fits in ZooKeeper's event-driven style.
 - State Machine: When a ZooKeeper event is fired, application's state is changed accordingly.
 Actors are state machines. They can change its state and behavior in thread-safe manner.
 - Fault Tolerant: ZooKeeper is distributed system so failures are inevitable. 
