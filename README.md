@@ -20,6 +20,13 @@ Akka scheduler, backoff supervision and circuit breaker can help recover gracefu
 A [example project](/example/src/main/scala/tanukkii/reactivezk/example/zookeeperbook) 
 shows how to use reactive-zookeepr by building a example application from [ZooKeeper O'Reilly book](https://github.com/fpj/zookeeper-book-example).
 
+## Install
+
+```
+resolvers += Resolver.bintrayRepo("tanukkii007", "maven")
+
+libraryDependencies += "github.com/TanUkkii007" % "reactivezookeeper_2.11" % "0.0.1"
+```
 
 ## Usage
 
