@@ -25,7 +25,7 @@ shows how to use reactive-zookeepr by building a example application from [ZooKe
 ```
 resolvers += Resolver.bintrayRepo("tanukkii007", "maven")
 
-libraryDependencies += "github.com/TanUkkii007" % "reactivezookeeper_2.11" % "0.0.1"
+libraryDependencies += "github.com/TanUkkii007" % "reactivezookeeper_2.11" % "0.0.2"
 ```
 
 ## Usage

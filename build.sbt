@@ -3,7 +3,7 @@ val zookeeperVersion = "3.4.8"
 val akkaVersion = "2.4.4"
 
 val commonSettings = Seq(
-  version := "0.0.1",
+  version := "0.0.2",
   organization := "github.com/TanUkkii007",
   homepage := Some(url("https://github.com/TanUkkii007/reactive-zookeeper")),
   scalaVersion := "2.11.8",
