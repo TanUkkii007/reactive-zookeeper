@@ -16,7 +16,7 @@ lazy val root = (project in file(".")).aggregate(reactiveZookeeper, reactiveZook
 lazy val reactiveZookeeper = (project in file("reactive-zookeeper")).settings(
   commonSettings ++ Seq(
     libraryDependencies ++= Seq(
-      "org.apache.zookeeper" % "zookeeper" % zookeeperVersion,
+      "org.apache.zookeeper" % "zookeeper" % zookeeperVersion % "provided",
       "org.slf4j" % "slf4j-log4j12" % "1.7.21",
       "com.typesafe.akka" %% "akka-actor" % akkaVersion,
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
@@ -27,5 +27,9 @@ lazy val reactiveZookeeper = (project in file("reactive-zookeeper")).settings(
 ).enablePlugins(BintrayPlugin)
 
 lazy val reactiveZookeeperExample = (project in file("example")).settings(
-  commonSettings
+  commonSettings ++ Seq(
+    libraryDependencies ++= Seq(
+      "org.apache.zookeeper" % "zookeeper" % zookeeperVersion
+    )
+  )
 ).dependsOn(reactiveZookeeper)
