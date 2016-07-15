@@ -20,7 +20,8 @@ lazy val reactiveZookeeper = (project in file("reactive-zookeeper")).settings(
       "org.slf4j" % "slf4j-log4j12" % "1.7.21",
       "com.typesafe.akka" %% "akka-actor" % akkaVersion,
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
-      "org.scalatest" %% "scalatest" % "2.2.6" % "test"
+      "org.scalatest" %% "scalatest" % "2.2.6" % "test",
+      "commons-io" % "commons-io" % "2.4" % "test"
     ),
     BintrayPlugin.autoImport.bintrayPackage := "reactive-zookeeper"
   )
