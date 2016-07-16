@@ -1,39 +1,32 @@
 package tanukkii.reactivezk
 
-import java.io.{ByteArrayInputStream, File}
-import org.apache.commons.io.FileUtils
-import org.apache.zookeeper.server.ServerConfig
-import org.apache.zookeeper.server.quorum.QuorumPeerConfig
+import java.io.{IOException, File}
+import com.google.common.io.Closeables
+import org.apache.curator.test.TestingServer
 import org.scalatest.{BeforeAndAfterAll, Suite}
 
 trait ZooKeeperTest extends Suite with BeforeAndAfterAll {
 
-  val server = new TestingZooKeeperMain()
+  var testingServer: TestingServer = _
 
-  val zooKeeperConfigString: String
+  val dataDir: String
 
-  private var dataDir: String = _
+  def zkConnectString: String = testingServer.getConnectString
+
+  def zkPort: Int = testingServer.getPort
 
   override protected def beforeAll(): Unit = {
-    new Thread(new Runnable {
-      override def run(): Unit = {
-        val config = new ServerConfig()
-        val peerConfig = new QuorumPeerConfig()
-        val props = new java.util.Properties()
-        props.load(new ByteArrayInputStream(zooKeeperConfigString.getBytes))
-        dataDir = props.getProperty("dataDir")
-        peerConfig.parseProperties(props)
-        config.readFrom(peerConfig)
-        server.runFromConfig(config)
-      }
-    }).start()
-    Thread.sleep(8000)
+    testingServer = new TestingServer(-1, new File(dataDir))
+    testingServer.start()
     super.beforeAll()
   }
 
   override protected def afterAll(): Unit = {
-    server.close()
-    FileUtils.deleteDirectory(new File(dataDir))
+    try {
+      Closeables.close(testingServer, true)
+    } catch {
+      case e: IOException =>
+    }
     super.afterAll()
   }
 }

@@ -10,22 +10,13 @@ import scala.concurrent.duration._
 class ZooKeeperSessionActorTest extends TestKit(ActorSystem("ZooKeeperSessionActorTest"))
   with WordSpecLike with ZooKeeperTest with Matchers with ImplicitSender with StopSystemAfterAll {
 
-  val (zkHost, zkPort) = RandomPortUtils.temporaryServerHostnameAndPort()
-
-  val zooKeeperConfigString =
-    """
-      |tickTime=1000
-      |initLimit=10
-      |syncLimit=5
-      |dataDir=target/zookeeper/ZooKeeperSessionActorTest
-      |clientPort=%d
-    """.format(zkPort).stripMargin
+  val dataDir: String = "target/zookeeper/ZooKeeperSessionActorTest"
 
   "ZooKeeperSessionActor" must {
 
-    val zooKeeperActor = system.actorOf(ZooKeeperSessionActor.props(s"$zkHost:$zkPort", 10 seconds))
-
     "create znode" in {
+
+      val zooKeeperActor = system.actorOf(ZooKeeperSessionActor.props(zkConnectString, 10 seconds))
 
       zooKeeperActor ! ZKOperations.Create("/test-create", "test data".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
 
@@ -33,6 +24,8 @@ class ZooKeeperSessionActorTest extends TestKit(ActorSystem("ZooKeeperSessionAct
     }
 
     "get data of znode" in {
+
+      val zooKeeperActor = system.actorOf(ZooKeeperSessionActor.props(zkConnectString, 10 seconds))
 
       zooKeeperActor ! ZKOperations.Create("/test-getdata", "test data".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
 
