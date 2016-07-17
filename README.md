@@ -1,6 +1,8 @@
 # Reactive Zookeeper
 Let-it-crash style ZooKeeper client based on Akka actor
 
+[![CircleCI](https://circleci.com/gh/TanUkkii007/reactive-zookeeper.svg?style=svg)](https://circleci.com/gh/TanUkkii007/reactive-zookeeper)
+
 ## Why Actor?
 
 - Asynchronous: ZooKeeper event callback is asynchronously executed and should never block in its execution.
