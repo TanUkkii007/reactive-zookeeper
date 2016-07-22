@@ -11,9 +11,17 @@ val commonSettings = Seq(
   licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 )
 
-lazy val root = (project in file(".")).aggregate(reactiveZookeeper, reactiveZookeeperExample)
+val noPublishSettings = Seq(
+  publish := (),
+  publishArtifact in Compile := false
+)
+
+lazy val root = (project in file("."))
+  .settings(noPublishSettings)
+  .aggregate(reactiveZookeeper, reactiveZookeeperExample)
 
 lazy val reactiveZookeeper = (project in file("reactive-zookeeper")).settings(
+  name := "reactive-zookeeper",
   commonSettings ++ Seq(
     libraryDependencies ++= Seq(
       "org.apache.zookeeper" % "zookeeper" % zookeeperVersion % "provided",
@@ -27,8 +35,11 @@ lazy val reactiveZookeeper = (project in file("reactive-zookeeper")).settings(
   )
 ).enablePlugins(BintrayPlugin)
 
-lazy val reactiveZookeeperExample = (project in file("example")).settings(
+lazy val reactiveZookeeperExample = (project in file("example"))
+  .settings(noPublishSettings)
+  .settings(
   commonSettings ++ Seq(
+    name := "reactive-zookeeper-example",
     libraryDependencies ++= Seq(
       "org.apache.zookeeper" % "zookeeper" % zookeeperVersion
     )
