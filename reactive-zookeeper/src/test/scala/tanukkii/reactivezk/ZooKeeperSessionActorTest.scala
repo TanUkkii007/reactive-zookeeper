@@ -129,5 +129,15 @@ class ZooKeeperSessionActorTest extends TestKit(ActorSystem("ZooKeeperSessionAct
       deleted.path should be("/test-delete")
       deleted.error.code() should be(KeeperException.Code.NONODE)
     }
+
+    "restart session" in {
+      val zooKeeperActor = system.actorOf(ZooKeeperSessionActor.props(zkConnectString, 10 seconds))
+
+      zooKeeperActor ! ZooKeeperSession.Restart
+      expectMsg(ZooKeeperSession.Restarted)
+
+      zooKeeperActor ! ZKOperations.Create("/test-restart", "test data".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
+      expectMsg(ZKOperations.Created("/test-restart", "/test-restart", NoContext))
+    }
   }
 }

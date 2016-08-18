@@ -1,8 +1,9 @@
 package tanukkii.reactivezk
 
-import akka.actor.{ActorLogging, Props, Actor}
-import org.apache.zookeeper.{WatchedEvent, ZooKeeper}
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import org.apache.zookeeper.{ WatchedEvent, ZooKeeper }
 import org.apache.zookeeper.Watcher.Event.KeeperState._
+
 import scala.concurrent.duration.FiniteDuration
 
 
@@ -10,9 +11,10 @@ object ZooKeeperSession {
   case object Close
   case object Closed
   case object Restart
+  case object Restarted
 }
 
-@SerialVersionUID(1L) class ZooKeeperSessionRestartException() extends Exception("closing the ZooKeeper session and will reestablish a new session")
+@SerialVersionUID(1L) case class ZooKeeperSessionRestartException(sender: ActorRef) extends Exception("closing the ZooKeeper session and will reestablish a new session")
 
 private [reactivezk] class ZooKeeperSessionActor(connectString: String, sessionTimeout: FiniteDuration) extends Actor
 with ActorLogging with WatcherCallback{
@@ -44,13 +46,22 @@ with ActorLogging with WatcherCallback{
       sender() ! Closed
       context.stop(self)
     }
-    case Restart => throw new ZooKeeperSessionRestartException()
+    case Restart => throw new ZooKeeperSessionRestartException(sender())
     case other => zookeeperOperation forward other
   }
 
   override def postStop(): Unit = {
     if (!closed) close()
     super.postStop()
+  }
+
+  override def postRestart(reason: Throwable): Unit = {
+    reason match {
+      case ZooKeeperSessionRestartException(ref) =>
+        ref ! Restarted
+      case _ =>
+    }
+    super.postRestart(reason)
   }
 
   def close() = {
