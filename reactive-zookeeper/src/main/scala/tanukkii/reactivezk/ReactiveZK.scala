@@ -1,29 +1,21 @@
 package tanukkii.reactivezk
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor._
 import scala.concurrent.duration._
 
-trait ReactiveZK {
-  def zookeeperSession: ActorRef
+private[reactivezk] class ReactiveZKImpl(system: ExtendedActorSystem) extends Extension {
+  private val config = system.settings.config.getConfig("reactive-zookeeper")
+
+  lazy val zookeeperSession: ActorRef = system.actorOf(ZooKeeperSessionActor.props(
+    config.getString("connect-string"),
+    config.getInt("session-timeout") millis)
+    , "zookeeper-session")
 }
 
-private class ReactiveZKImpl(val zookeeperSession: ActorRef) extends ReactiveZK
+object ReactiveZK extends ExtensionId[ReactiveZKImpl] with ExtensionIdProvider {
+  override def createExtension(system: ExtendedActorSystem): ReactiveZKImpl = new ReactiveZKImpl(system)
 
-object ReactiveZK {
-  private var session: Option[ActorRef] = None
+  override def lookup(): ExtensionId[_ <: Extension] = ReactiveZK
 
-  def apply(system: ActorSystem): ReactiveZK = synchronized {
-    session match {
-      case None => {
-        val config = system.settings.config
-        val ref = system.actorOf(ZooKeeperSessionActor.props(
-          config.getString("reactive-zookeeper.connect-string"),
-          config.getInt("reactive-zookeeper.session-timeout") millis)
-        , "zookeeper-session")
-        session = Some(ref)
-        new ReactiveZKImpl(ref)
-      }
-      case Some(ref) => new ReactiveZKImpl(ref)
-    }
-  }
+  override def get(system: ActorSystem): ReactiveZKImpl = super.get(system)
 }
