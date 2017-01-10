@@ -5,6 +5,7 @@ trait CallbackConversion extends StringCallbackConversion
   with StatCallbackConversion
   with ChildrenCallbackConversion
   with VoidCallbackConversion
+  with MultiCallbackConversion
   with WatcherConversion
 
 object CallbackConversion extends CallbackConversion
