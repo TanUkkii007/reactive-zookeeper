@@ -13,7 +13,9 @@ class WorkerSupervisor extends Actor with ActorLogging {
 
   context.system.eventStream.subscribe(self, classOf[ZooKeeperWatchEvent])
 
-  val zookeeperSession = ReactiveZK(context.system).zookeeperSession
+  val settings = ZKSessionSettings(context.system)
+
+  val zookeeperSession = context.actorOf(ZooKeeperSessionActor.props(settings.connectString, settings.sessionTimeout), "zookeeper-session")
 
   val worker = context.actorOf(Worker.props(Integer.toHexString(new Random().nextInt()), zookeeperSession, self), "worker")
 

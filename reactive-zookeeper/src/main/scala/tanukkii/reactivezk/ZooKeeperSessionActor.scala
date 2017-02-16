@@ -1,12 +1,24 @@
 package tanukkii.reactivezk
 
 import java.util.concurrent.TimeUnit
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{ Actor, ActorLogging, ActorRef, ActorSystem, Props }
 import org.apache.zookeeper.ZooKeeper
 import org.apache.zookeeper.Watcher.Event.KeeperState._
+
 import scala.concurrent.duration.FiniteDuration
 
 case class ZKSessionSettings(connectString: String, sessionTimeout: FiniteDuration, connectionTimeout: FiniteDuration)
+
+object ZKSessionSettings {
+  def apply(system: ActorSystem): ZKSessionSettings = {
+    val c = system.settings.config.getConfig("reactive-zookeeper")
+    ZKSessionSettings(
+      connectString = c.getString("connect-string"),
+      sessionTimeout = FiniteDuration(c.getInt("session-timeout"), TimeUnit.MILLISECONDS),
+      connectionTimeout = FiniteDuration(c.getInt("connection-timeout"), TimeUnit.MILLISECONDS)
+    )
+  }
+}
 
 case class ZKSessionSupervisorSettings(props: Props, childName: String, isConnectionStateAware: Boolean)
 
