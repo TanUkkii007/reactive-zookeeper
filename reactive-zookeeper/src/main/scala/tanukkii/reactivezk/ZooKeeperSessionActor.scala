@@ -6,7 +6,9 @@ import org.apache.zookeeper.ZooKeeper
 import org.apache.zookeeper.Watcher.Event.KeeperState._
 import scala.concurrent.duration.FiniteDuration
 
-case class ZooKeeperSessionSettings(connectString: String, sessionTimeout: FiniteDuration, connectionTimeout: FiniteDuration)
+case class ZKSessionSettings(connectString: String, sessionTimeout: FiniteDuration, connectionTimeout: FiniteDuration)
+
+case class ZKSessionSupervisorSettings(props: Props, childName: String, isConnectionStateAware: Boolean)
 
 object ZooKeeperSession {
   case object Close
@@ -19,7 +21,7 @@ object ZooKeeperSession {
 
 @SerialVersionUID(1L) class ConnectedRecoveryTimeoutException(timeout: FiniteDuration) extends Exception(s"ZooKeeper connection did not recover from Disconnected state after $timeout")
 
-private [reactivezk] class ZooKeeperSessionActor(settings: ZooKeeperSessionSettings) extends Actor
+private [reactivezk] class ZooKeeperSessionActor(settings: ZKSessionSettings, supervisorSettings: Option[ZKSessionSupervisorSettings]) extends Actor
 with ActorLogging with WatcherCallback{
   import WatcherConversion._
   import ZooKeeperSession._
@@ -32,11 +34,15 @@ with ActorLogging with WatcherCallback{
 
   val zookeeperOperation: ActorRef = context.actorOf(ZooKeeperOperationActor.props(zookeeper), "zookeeper-operation")
 
+  val childActorOpt: Option[ActorRef] = supervisorSettings.map(s => context.actorOf(s.props, s.childName))
+
   def receive: Receive = {
     case ZooKeeperWatchEvent(e) => {
       log.info(e.toString)
       e.getState match {
-        case SyncConnected => connected = true
+        case SyncConnected =>
+          connected = true
+          notifyConnectionState(SyncConnectedState)
         case Disconnected =>
           connected = false
           if (settings.connectionTimeout == FiniteDuration(0L, TimeUnit.SECONDS)) {
@@ -44,6 +50,7 @@ with ActorLogging with WatcherCallback{
           } else {
             context.system.scheduler.scheduleOnce(settings.connectionTimeout, self, ZooKeeperSessionActor.DisconnectedTimeout)
           }
+          notifyConnectionState(DisconnectedState)
         case Expired => throw ZooKeeperSessionRestartException(None)
         case _ =>
       }
@@ -57,7 +64,8 @@ with ActorLogging with WatcherCallback{
     case Restart => throw ZooKeeperSessionRestartException(Some(sender()))
     case ZooKeeperSessionActor.DisconnectedTimeout if !connected =>
       throw new ConnectedRecoveryTimeoutException(settings.connectionTimeout)
-    case other => zookeeperOperation forward other
+    case cmd: ZKOperations.ZKCommand => zookeeperOperation forward cmd
+    case other => childActorOpt.foreach(_ forward other)
   }
 
   override def postStop(): Unit = {
@@ -78,11 +86,21 @@ with ActorLogging with WatcherCallback{
     zookeeper.close()
     log.info("ZooKeeper session is closed.")
   }
+
+  private def notifyConnectionState(message: ZooKeeperConnectionState): Unit = {
+    for {
+      s <- supervisorSettings
+      if s.isConnectionStateAware
+      ref <- childActorOpt
+    } {
+      ref ! message
+    }
+  }
 }
 
 object ZooKeeperSessionActor {
-  def props(settings: ZooKeeperSessionSettings) = Props(new ZooKeeperSessionActor(settings))
-  def props(connectString: String, sessionTimeout: FiniteDuration): Props = Props(new ZooKeeperSessionActor(ZooKeeperSessionSettings(connectString, sessionTimeout, sessionTimeout)))
+  def props(settings: ZKSessionSettings, supervisorSettings: ZKSessionSupervisorSettings) = Props(new ZooKeeperSessionActor(settings, Some(supervisorSettings)))
+  def props(connectString: String, sessionTimeout: FiniteDuration): Props = Props(new ZooKeeperSessionActor(ZKSessionSettings(connectString, sessionTimeout, sessionTimeout), None))
 
   private case object DisconnectedTimeout
 }

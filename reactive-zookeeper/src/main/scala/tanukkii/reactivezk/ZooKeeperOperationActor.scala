@@ -12,37 +12,39 @@ case object NoContext extends NoContext
 private [reactivezk] case class ContextEnvelope(sender: ActorRef, originalCtx: Any)
 
 object ZKOperations {
-  case class Create(path: String, data: Array[Byte], acl: List[ACL], createMode: CreateMode, ctx: Any = NoContext)
+  sealed trait ZKCommand
+
+  case class Create(path: String, data: Array[Byte], acl: List[ACL], createMode: CreateMode, ctx: Any = NoContext) extends ZKCommand
   sealed trait CreateResponse
   case class Created(path: String, name: String, ctx: Any) extends CreateResponse
   case class CreateFailure(error: KeeperException, path: String, ctx: Any) extends CreateResponse
 
-  case class GetData(path: String, watch: Boolean = false, ctx: Any = NoContext)
+  case class GetData(path: String, watch: Boolean = false, ctx: Any = NoContext) extends ZKCommand
   sealed trait GetDataResponse
   case class DataGot(path: String, data: Array[Byte], stat: Stat, ctx: Any) extends GetDataResponse
   case class GetDataFailure(error: KeeperException, path: String, ctx: Any) extends GetDataResponse
 
-  case class SetData(path: String, data: Array[Byte], version: Int, ctx: Any = NoContext)
+  case class SetData(path: String, data: Array[Byte], version: Int, ctx: Any = NoContext) extends ZKCommand
   sealed trait SetDataResponse
   case class DataSet(path: String, stat: Stat, ctx: Any) extends SetDataResponse
   case class SetDataFailure(error: KeeperException, path: String, ctx: Any) extends SetDataResponse
 
-  case class Exists(path: String, watch: Boolean = false, ctx: Any = NoContext)
+  case class Exists(path: String, watch: Boolean = false, ctx: Any = NoContext) extends ZKCommand
   sealed trait ExistsResponse
   case class DoesExist(path: String, stat: Option[Stat], ctx: Any) extends ExistsResponse
   case class ExistsFailure(error: KeeperException, path: String, ctx: Any) extends ExistsResponse
 
-  case class GetChildren(path: String, watch: Boolean = false, ctx: Any = NoContext)
+  case class GetChildren(path: String, watch: Boolean = false, ctx: Any = NoContext) extends ZKCommand
   sealed trait GetChildrenResponse
   case class ChildrenGot(path: String, children: List[String], ctx: Any)
   case class GetChildrenFailure(error: KeeperException, path: String, ctx: Any)
 
-  case class Delete(path: String, version: Int, ctx: Any = NoContext)
+  case class Delete(path: String, version: Int, ctx: Any = NoContext) extends ZKCommand
   sealed trait DeleteResponse
   case class Deleted(path: String, ctx: Any) extends DeleteResponse
   case class DeleteFailure(error: KeeperException, path: String, ctx: Any) extends DeleteResponse
 
-  case class Multi(ops: List[Op], ctx: Any = NoContext)
+  case class Multi(ops: List[Op], ctx: Any = NoContext) extends ZKCommand
   sealed trait MultiResponse
   case class MultiResult(results: Seq[OpResult]) extends MultiResponse
   case class MultiFailure(error: KeeperException, path: String, ctx: Any) extends MultiResponse
