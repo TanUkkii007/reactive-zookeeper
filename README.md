@@ -20,7 +20,7 @@ Akka scheduler, backoff supervision and circuit breaker can help recover gracefu
 ## Example
 
 A [example project](/example/src/main/scala/tanukkii/reactivezk/example/zookeeperbook) 
-shows how to use reactive-zookeepr by building a example application from [ZooKeeper O'Reilly book](https://github.com/fpj/zookeeper-book-example).
+shows how to use reactive-zookeepr by building a example application from [ZooKeeper book from O'Reilly](https://github.com/fpj/zookeeper-book-example).
 
 ## Install
 
@@ -45,10 +45,83 @@ import tanukkii.reactivezk._
 
 ZooKeeper session is represented as an actor.
 
-You can gain a singleton session `ActorRef` via
+You can create a session `ActorRef` with
 
 ```
-ReactiveZK(system).zookeeperSession
+val connectString = "localhost:2181"
+val sessionTimeout = 5000
+system.actorOf(ZooKeeperSessionActor.props(connectString, sessionTimeout)
+```
+
+`ZooKeeperSessionActor` manage ZooKeeper session in a following way
+
+1. If a session is expired, `ZooKeeperSessionActor` throws `ZooKeeperSessionRestartException` 
+and closes expired session and reestablishes a new session.
+1. If a connection is disconnected, ZooKeeperSessionActor throws `ConnectionRecoveryTimeoutException` after connection-timeout periods.
+This results in closing previous session and reestablishing a new session.
+
+### Lifecycle management of actors using ZooKeeper
+
+Actors that communicate with `ZooKeeperSessionActor` must handle ZooKeeper session state changes.
+Especially Expired sate and Disconnected state transition  must be carefully handled by clients.
+It is not a simple task and bad implementation could cause disastrous effect to your system.
+Since `ZooKeeperSessionActor` is aware of ZooKeeper session state change 
+and its lifecycle as an actor is synchronised with the session state transition, one way to handle ZooKeeper session state change is 
+to have your actor to be a child of `ZooKeeperSessionActor`. 
+When `ZooKeeperSessionActor` restarts for some reason caused by session state changes, your actor is also restarted and its internal state is cleared.
+
+To register your actor as a child of `ZooKeeperSessionActor`, pass its Props to argument of `ZooKeeperSessionActor`.
+
+```scala
+val settings = ZKSessionSettings(system)
+
+val supervisorSettings = ZKSessionSupervisorSettings(ActorUsingZooKeeper.props, "client", isConnectionStateAware = false)
+
+val yourActor  = system.actorOf(ZooKeeperSessionActor.props(settings, supervisorSettings), "zookeeper-session")
+```
+
+You can obtain ActorRef of `ZooKeeperSessionActor` with `context.parent`.
+
+```scala
+class ActorUsingZooKeeper extends Actor {
+  val zkSession = context.parent
+  
+  def receive: Receive = {
+    case "Ping" => 
+      zkSession ! ZKOperations.Exists("/pings")
+      sender() ! "Pong"
+  }
+}
+
+object ActorUsingZooKeeper [
+  def props = Props(new ActorUsingZooKeeper)
+}
+```
+
+You can communicate with your actor via `ZooKeeperSessionActor`. `ZooKeeperSessionActor` can forward messages to the registered actor.
+
+```scala
+yourActor ! "Ping"
+
+expectMsg("Pong")
+```
+
+If a registered actor wants to behave passive or read-only mode when disconnected from ZooKeeper, you can use `ZKConnectionStateAwareActor` trait.
+
+```
+trait ZKConnectionStateAwareActor extends Actor {
+  // `receive` called under SyncConnected state
+  def receiveSyncConnected: Receive
+
+  // `receive` called under Disconnected state
+  def receiveDisconnected: Receive
+}
+```
+
+If a registered actor implements `ZKConnectionStateAwareActor`, you can enable passive mode transition with `isConnectionStateAware=true`.
+
+```scala
+val supervisorSettings = ZKSessionSupervisorSettings(ActorUsingZooKeeper.props, "client", isConnectionStateAware = true)
 ```
 
 ### ZooKeeper Operation
@@ -298,6 +371,7 @@ Default values are follow.
 reactive-zookeeper {
   connect-string = "localhost:2181"
   session-timeout = 5000
+  connection-timeout = ${reactive-zookeeper.session-timeout}
 }
 ```
 

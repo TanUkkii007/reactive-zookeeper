@@ -31,7 +31,7 @@ object ZooKeeperSession {
 
 @SerialVersionUID(1L) case class ZooKeeperSessionRestartException(sender: Option[ActorRef]) extends Exception("Closing the ZooKeeper session and will reestablish a new session")
 
-@SerialVersionUID(1L) class ConnectedRecoveryTimeoutException(timeout: FiniteDuration) extends Exception(s"ZooKeeper connection did not recover from Disconnected state after $timeout")
+@SerialVersionUID(1L) class ConnectionRecoveryTimeoutException(timeout: FiniteDuration) extends Exception(s"ZooKeeper connection did not recover from Disconnected state after $timeout")
 
 private [reactivezk] class ZooKeeperSessionActor(settings: ZKSessionSettings, supervisorSettings: Option[ZKSessionSupervisorSettings]) extends Actor
 with ActorLogging with WatcherCallback{
@@ -58,7 +58,7 @@ with ActorLogging with WatcherCallback{
         case Disconnected =>
           connected = false
           if (settings.connectionTimeout == FiniteDuration(0L, TimeUnit.SECONDS)) {
-            throw new ConnectedRecoveryTimeoutException(settings.connectionTimeout)
+            throw new ConnectionRecoveryTimeoutException(settings.connectionTimeout)
           } else {
             context.system.scheduler.scheduleOnce(settings.connectionTimeout, self, ZooKeeperSessionActor.DisconnectedTimeout)
           }
@@ -75,7 +75,7 @@ with ActorLogging with WatcherCallback{
     }
     case Restart => throw ZooKeeperSessionRestartException(Some(sender()))
     case ZooKeeperSessionActor.DisconnectedTimeout if !connected =>
-      throw new ConnectedRecoveryTimeoutException(settings.connectionTimeout)
+      throw new ConnectionRecoveryTimeoutException(settings.connectionTimeout)
     case cmd: ZKOperations.ZKCommand => zookeeperOperation forward cmd
     case other => childActorOpt.foreach(_ forward other)
   }

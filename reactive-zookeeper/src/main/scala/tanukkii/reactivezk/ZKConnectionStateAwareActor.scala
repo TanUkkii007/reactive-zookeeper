@@ -7,7 +7,7 @@ private [reactivezk] case object DisconnectedState extends ZooKeeperConnectionSt
 private [reactivezk] case object SyncConnectedState extends ZooKeeperConnectionState
 
 trait ZKConnectionStateAwareActor extends Actor {
-  var syncConnected = false
+  private var syncConnected = false
 
   def receive: Receive = {
     case SyncConnectedState =>
