@@ -101,11 +101,19 @@ class ZooKeeperSessionActorLifecycleTest  extends TestKit(ActorSystem("ZooKeeper
       val supervisorSettings = ZKSessionSupervisorSettings(ConnectionStateAwareEchoActor.props(probe.ref), "echo", isConnectionStateAware = true)
       val zooKeeperActor = system.actorOf(ZooKeeperSessionActor.props(settings, supervisorSettings))
       probe.expectMsg("Started")
+
+      // ensure to be SyncConnected state
+      probe.send(zooKeeperActor, ZKOperations.Exists("/test"))
+      probe.expectMsgType[ZKOperations.ExistsFailure]
+
       zooKeeperActor ! "test"
       probe.expectMsg("test")
       zooKeeperActor ! ZooKeeperWatchEvent(new WatchedEvent(EventType.None, KeeperState.Disconnected, ""))
       zooKeeperActor ! "test"
       probe.expectMsg("Disconnected")
+      zooKeeperActor ! ZooKeeperWatchEvent(new WatchedEvent(EventType.None, KeeperState.SyncConnected, ""))
+      zooKeeperActor ! "test"
+      probe.expectMsg("test")
     }
   }
 
