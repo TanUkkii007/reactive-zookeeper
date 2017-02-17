@@ -14,8 +14,10 @@ object ClientProtocol {
   case class SubmitTask(taskObject: TaskObject)
 }
 
-class Client(zookeeperSession: ActorRef) extends Actor {
+class Client extends Actor {
   import ClientProtocol._
+
+  val zookeeperSession: ActorRef = context.parent
 
   def receive: Receive = {
     case SubmitTask(taskObject) => context.actorOf(Task.props(zookeeperSession)) forward TaskProtocol.Submit(taskObject)
@@ -23,7 +25,7 @@ class Client(zookeeperSession: ActorRef) extends Actor {
 }
 
 object Client {
-  def props(zookeeperSession: ActorRef): Props = Props(new Client(zookeeperSession))
+  def props: Props = Props(new Client)
 }
 
 object TaskProtocol {

@@ -1,8 +1,9 @@
 package tanukkii.reactivezk.example.zookeeperbook
 
 import akka.actor.ActorSystem
-import tanukkii.reactivezk.ReactiveZK
+import tanukkii.reactivezk.{ ZKSessionSettings, ZKSessionSupervisorSettings, ZooKeeperSessionActor }
 import tanukkii.reactivezk.example.zookeeperbook.ClientProtocol.SubmitTask
+
 import scala.concurrent.duration._
 
 object ClientMain extends App {
@@ -11,9 +12,11 @@ object ClientMain extends App {
 
   import system.dispatcher
 
-  val zookeeperSession = ReactiveZK(system).zookeeperSession
+  val settings = ZKSessionSettings(system)
 
-  val client = system.actorOf(Client.props(zookeeperSession))
+  val supervisorSettings = ZKSessionSupervisorSettings(Client.props, "client", isConnectionStateAware = false)
+
+  val client  = system.actorOf(ZooKeeperSessionActor.props(settings, supervisorSettings), "zookeeper-session")
 
   system.scheduler.schedule(1 second, 1 second, client, SubmitTask(TaskObject("Sample task")))
 }
