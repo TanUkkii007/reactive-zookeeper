@@ -1,8 +1,10 @@
 package tanukkii.reactivezk
 
-import akka.actor.{Actor, ActorRef, Props}
+import java.util
+
+import akka.actor.{ Actor, ActorRef, Props }
 import org.apache.zookeeper._
-import org.apache.zookeeper.data.{ACL, Stat}
+import org.apache.zookeeper.data.{ ACL, Stat }
 
 import scala.collection.JavaConverters._
 
@@ -47,11 +49,11 @@ object ZKOperations {
   case class Multi(ops: List[Op], ctx: Any = NoContext) extends ZKCommand
   sealed trait MultiResponse
   case class MultiResult(results: Seq[OpResult]) extends MultiResponse
-  case class MultiFailure(error: KeeperException, path: String, ctx: Any) extends MultiResponse
+  case class MultiFailure(error: KeeperException, ctx: Any) extends MultiResponse
 }
 
 private [reactivezk] class ZooKeeperOperationActor(zookeeper: ZooKeeper) extends Actor
-with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback with ExistsAsyncCallback with GetChildrenAsyncCallback with DeleteAsyncCallback with MultiAsyncCallback with WatcherCallback {
+with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback with ExistsAsyncCallback with GetChildrenAsyncCallback with DeleteAsyncCallback with WatcherCallback {
   import CallbackConversion._
   import ZKOperations._
 
@@ -65,7 +67,13 @@ with CreateAsyncCallback with GetDataAsyncCallback with SetDataAsyncCallback wit
     case GetChildren(path, watch, ctx) if !watch => zookeeper.getChildren(path, watch, getChildrenAsyncCallback, ContextEnvelope(sender(), ctx))
     case GetChildren(path, watch, ctx) if watch => zookeeper.getChildren(path, watchCallback(sender()), getChildrenAsyncCallback, ContextEnvelope(sender(), ctx))
     case Delete(path, version, ctx) => zookeeper.delete(path, version, deleteAsyncCallback, ContextEnvelope(sender(), ctx))
-    case Multi(ops, ctx) => zookeeper.multi(ops.asJava, multiCallback, ContextEnvelope(sender(), ctx))
+    case Multi(ops, ctx) => try {
+      // in order to support ZooKeeper versions <3.4.7 synchronous API is used here
+      val opResults: util.List[OpResult] = zookeeper.multi(ops.asJava)
+      sender() ! MultiResult(opResults.asScala)
+    } catch {
+      case e: KeeperException => sender() ! MultiFailure(e, ctx)
+    }
   }
 
 }
