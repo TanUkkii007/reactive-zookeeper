@@ -24,20 +24,30 @@ object ZKOperations {
   trait GenericZKResponse[+T <: ZKCommand] extends ZKOperation
   // we have to defined these concrete types for type constraint combinations due to type erasure.
   trait ZKResponse extends GenericZKResponse[ZKCommand]
-  trait ZKResponseOfCommandWithPath extends GenericZKResponse[ZKCommand with Path] with Path
-  trait ZKResponseOfCommandWithPathWatch extends GenericZKResponse[ZKCommand with Path with Watch] with Path
-  trait ZKResponseOfCommandWithPathData extends GenericZKResponse[ZKCommand with Path with Data] with Path
-  trait ZKResponseOfCommandWithPathVersion extends GenericZKResponse[ZKCommand with Path with Version] with Path
-  trait ZKResponseOfCommandWithPathDataVersion extends GenericZKResponse[ZKCommand with Path with Data with Version] with Path
+  trait ZKResponseOfCommandWithPath extends Path
+    with GenericZKResponse[ZKCommand with Path] with ZKResponse
+  trait ZKResponseOfCommandWithPathWatch extends Path
+    with GenericZKResponse[ZKCommand with Path with Watch] with ZKResponse
+  trait ZKResponseOfCommandWithPathData extends Path
+    with GenericZKResponse[ZKCommand with Path with Data] with ZKResponse
+  trait ZKResponseOfCommandWithPathVersion extends Path
+    with GenericZKResponse[ZKCommand with Path with Version] with ZKResponse
+  trait ZKResponseOfCommandWithPathDataVersion extends Path
+    with GenericZKResponse[ZKCommand with Path with Data with Version] with ZKResponse
 
   trait GenericZKCommandFailure[+T <: ZKCommand] extends GenericZKResponse[T] { self: GenericZKResponse[T] => val error: KeeperException }
   // we have to defined these concrete types for type constraint combinations due to type erasure.
-  trait ZKCommandFailure extends GenericZKCommandFailure[ZKCommand]
-  trait ZKCommandFailureOfCommandWithPath extends ZKResponseOfCommandWithPath
-  trait ZKCommandFailureOfCommandWithPathWatch extends ZKResponseOfCommandWithPathWatch
-  trait ZKCommandFailureOfCommandWithPathData extends ZKResponseOfCommandWithPathData
-  trait ZKCommandFailureOfCommandWithPathVersion extends ZKResponseOfCommandWithPathVersion
-  trait ZKCommandFailureOfCommandWithPathDataVersion extends ZKResponseOfCommandWithPathDataVersion
+  trait ZKCommandFailure extends ZKResponse with GenericZKCommandFailure[ZKCommand]
+  trait ZKCommandFailureOfCommandWithPath extends  GenericZKCommandFailure[ZKCommand with Path]
+    with ZKResponseOfCommandWithPath with ZKCommandFailure
+  trait ZKCommandFailureOfCommandWithPathWatch extends  GenericZKCommandFailure[ZKCommand with Path with Watch]
+    with ZKResponseOfCommandWithPathWatch with ZKCommandFailure
+  trait ZKCommandFailureOfCommandWithPathData extends GenericZKCommandFailure[ZKCommand with Path with Data]
+    with ZKResponseOfCommandWithPathData with ZKCommandFailure
+  trait ZKCommandFailureOfCommandWithPathVersion extends GenericZKCommandFailure[ZKCommand with Path with Version]
+    with ZKResponseOfCommandWithPathVersion with ZKCommandFailure
+  trait ZKCommandFailureOfCommandWithPathDataVersion extends GenericZKCommandFailure[ZKCommand with Path with Data with Version]
+    with ZKResponseOfCommandWithPathDataVersion with ZKCommandFailure
 
   case class Create(path: String, data: Array[Byte], acl: List[ACL], createMode: CreateMode, ctx: Any = NoContext) extends ZKCommand with Path with Data
   sealed trait CreateResponse extends GenericZKResponse[Create] with ZKResponseOfCommandWithPathData
