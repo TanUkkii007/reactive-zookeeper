@@ -16,6 +16,10 @@ val noPublishSettings = Seq(
   publishArtifact in Compile := false
 )
 
+val publishSettings = Seq(
+  releaseCrossBuild := true
+)
+
 lazy val root = (project in file("."))
   .settings(commonSettings)
   .settings(noPublishSettings)
@@ -23,7 +27,7 @@ lazy val root = (project in file("."))
 
 lazy val reactiveZookeeper = (project in file("reactive-zookeeper")).settings(
   name := "reactive-zookeeper",
-  commonSettings ++ Seq(
+  commonSettings ++ publishSettings ++ Seq(
     libraryDependencies ++= Seq(
       "org.apache.zookeeper" % "zookeeper" % zookeeperVersion % "provided",
       "org.slf4j" % "slf4j-log4j12" % "1.7.21",
