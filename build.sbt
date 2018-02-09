@@ -13,7 +13,8 @@ val commonSettings = Seq(
 
 val noPublishSettings = Seq(
   publish := (),
-  publishArtifact in Compile := false
+  publishArtifact in Compile := false,
+  releaseCrossBuild := true
 )
 
 val publishSettings = Seq(
