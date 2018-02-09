@@ -1,11 +1,12 @@
 val zookeeperVersion = "3.4.8"
 
-val akkaVersion = "2.4.4"
+val akkaVersion = "2.5.9"
 
 val commonSettings = Seq(
   organization := "github.com/TanUkkii007",
   homepage := Some(url("https://github.com/TanUkkii007/reactive-zookeeper")),
-  scalaVersion := "2.11.8",
+  scalaVersion := "2.12.4",
+  crossScalaVersions := Seq("2.11.8", "2.12.4"),
   scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-encoding", "UTF-8", "-language:implicitConversions", "-language:postfixOps"),
   licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 )
@@ -16,6 +17,7 @@ val noPublishSettings = Seq(
 )
 
 lazy val root = (project in file("."))
+  .settings(commonSettings)
   .settings(noPublishSettings)
   .aggregate(reactiveZookeeper, reactiveZookeeperExample)
 
@@ -27,7 +29,7 @@ lazy val reactiveZookeeper = (project in file("reactive-zookeeper")).settings(
       "org.slf4j" % "slf4j-log4j12" % "1.7.21",
       "com.typesafe.akka" %% "akka-actor" % akkaVersion,
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
-      "org.scalatest" %% "scalatest" % "2.2.6" % "test",
+      "org.scalatest" %% "scalatest" % "3.0.5" % "test",
       "org.apache.curator" % "curator-test" % "2.11.0" % "test"
     ),
     BintrayPlugin.autoImport.bintrayPackage := "reactive-zookeeper"
