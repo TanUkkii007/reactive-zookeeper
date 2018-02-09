@@ -29,7 +29,7 @@ resolvers += Resolver.bintrayRepo("tanukkii007", "maven")
 
 libraryDependencies ++= Seq(
   "org.apache.zookeeper" % "zookeeper" % "3.4.8",
-  "github.com/TanUkkii007" % "reactive-zookeeper_2.11" % "0.3.3"
+  "github.com/TanUkkii007" % "reactive-zookeeper_2.11" % "0.3.6"
 )
 ```
 
